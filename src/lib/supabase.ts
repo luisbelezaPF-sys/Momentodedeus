@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 
 // Fallback values para evitar erro durante build
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co'
@@ -11,7 +11,13 @@ export const isSupabaseConfigured = () => {
          supabaseUrl.includes('supabase.co')
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// Função para criar cliente Supabase (compatível com as APIs)
+export const createClient = () => {
+  return createSupabaseClient(supabaseUrl, supabaseAnonKey)
+}
+
+// Cliente Supabase padrão (mantido para compatibilidade)
+export const supabase = createSupabaseClient(supabaseUrl, supabaseAnonKey)
 
 export type Database = {
   public: {
@@ -190,6 +196,78 @@ export type Database = {
           metodo_pagamento?: string
           inicio?: string
           validade?: string
+        }
+      }
+      hinos_do_dia: {
+        Row: {
+          id: number
+          data: string
+          titulo: string
+          artista: string
+          ordem: number
+        }
+        Insert: {
+          id?: number
+          data: string
+          titulo: string
+          artista: string
+          ordem: number
+        }
+        Update: {
+          id?: number
+          data?: string
+          titulo?: string
+          artista?: string
+          ordem?: number
+        }
+      }
+      planos_leitura: {
+        Row: {
+          id: number
+          data: string
+          titulo: string
+          descricao: string
+          leitura_manha: string
+          leitura_tarde: string
+          leitura_noite: string
+        }
+        Insert: {
+          id?: number
+          data: string
+          titulo: string
+          descricao: string
+          leitura_manha: string
+          leitura_tarde: string
+          leitura_noite: string
+        }
+        Update: {
+          id?: number
+          data?: string
+          titulo?: string
+          descricao?: string
+          leitura_manha?: string
+          leitura_tarde?: string
+          leitura_noite?: string
+        }
+      }
+      pedidos_oracao_exemplo: {
+        Row: {
+          id: number
+          data: string
+          categoria: string
+          pedido: string
+        }
+        Insert: {
+          id?: number
+          data: string
+          categoria: string
+          pedido: string
+        }
+        Update: {
+          id?: number
+          data?: string
+          categoria?: string
+          pedido?: string
         }
       }
     }

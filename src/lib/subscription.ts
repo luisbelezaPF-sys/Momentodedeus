@@ -1,85 +1,86 @@
 import { supabase } from './supabase'
 
 export interface UserSubscription {
-  id: string
-  user_id: string
-  stripe_customer_id: string
-  stripe_subscription_id: string
-  status: 'active' | 'canceled' | 'past_due' | 'unpaid'
-  current_period_start: string
-  current_period_end: string
-  created_at: string
-  updated_at: string
+  status: 'active' | 'inactive' | 'pending'
+  current_period_end?: string
+  transaction_id?: string
 }
 
 export async function checkUserSubscription(userId: string): Promise<UserSubscription | null> {
   try {
-    const { data, error } = await supabase
-      .from('user_subscriptions')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('status', 'active')
-      .single()
+    const response = await fetch('/api/subscription/check', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ userId }),
+    })
 
-    if (error) {
-      console.error('Erro ao verificar assinatura:', error)
+    if (!response.ok) {
       return null
     }
 
-    return data
+    return await response.json()
   } catch (error) {
     console.error('Erro ao verificar assinatura:', error)
     return null
   }
 }
 
-export async function createSubscription(userId: string, subscriptionData: any) {
+export async function loginUser(email: string, password: string) {
   try {
-    const { data, error } = await supabase
-      .from('user_subscriptions')
-      .insert({
-        user_id: userId,
-        stripe_customer_id: subscriptionData.customer,
-        stripe_subscription_id: subscriptionData.id,
-        status: subscriptionData.status,
-        current_period_start: new Date(subscriptionData.current_period_start * 1000).toISOString(),
-        current_period_end: new Date(subscriptionData.current_period_end * 1000).toISOString()
-      })
-      .select()
-      .single()
+    const response = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email, password }),
+    })
 
-    if (error) {
-      console.error('Erro ao criar assinatura:', error)
-      return null
+    const data = await response.json()
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Erro no login')
     }
 
     return data
   } catch (error) {
-    console.error('Erro ao criar assinatura:', error)
-    return null
+    console.error('Erro no login:', error)
+    throw error
   }
 }
 
-export async function updateSubscriptionStatus(subscriptionId: string, status: string) {
+// Função para redirecionar para o PagSeguro
+export const PAGSEGURO_PAYMENT_LINK = 'https://pag.ae/81aj-zE2K'
+
+export function redirectToPagSeguro() {
+  window.open(PAGSEGURO_PAYMENT_LINK, '_blank')
+}
+
+// Função para simular verificação de pagamento (para desenvolvimento)
+export async function simulatePaymentVerification(email: string) {
   try {
-    const { data, error } = await supabase
-      .from('user_subscriptions')
-      .update({ 
-        status,
-        updated_at: new Date().toISOString()
-      })
-      .eq('stripe_subscription_id', subscriptionId)
-      .select()
-      .single()
+    // Simular webhook do PagSeguro
+    const response = await fetch('/api/webhook/pagseguro', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        transaction: {
+          id: `sim_${Date.now()}`,
+          status: 'paid',
+          customer: {
+            email: email
+          },
+          amount: 19.90
+        }
+      }),
+    })
 
-    if (error) {
-      console.error('Erro ao atualizar status da assinatura:', error)
-      return null
-    }
-
-    return data
+    return response.ok
   } catch (error) {
-    console.error('Erro ao atualizar status da assinatura:', error)
-    return null
+    console.error('Erro ao simular pagamento:', error)
+    return false
   }
 }

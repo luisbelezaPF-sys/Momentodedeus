@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import { checkUserSubscription, UserSubscription } from '@/lib/subscription'
-import { redirectToPagSeguro, PAGSEGURO_PAYMENT_LINK } from '@/lib/stripe'
+import { checkUserSubscription, UserSubscription, loginUser } from '@/lib/subscription'
 import { 
   Heart, 
   Book, 
@@ -25,27 +24,45 @@ import {
   MessageCircle,
   Lock,
   CreditCard,
-  X
+  X,
+  LogIn,
+  UserPlus,
+  Mail,
+  Eye,
+  EyeOff,
+  RefreshCw
 } from 'lucide-react'
 
-interface DevocionalData {
-  dia: number
+interface ConteudoDiario {
   devocional: {
-    texto_biblico_ref: string
-    texto_biblico_full: string
-    reflexao: string
-    oracao: string
-  }
-  versiculo: {
+    id: number
+    tema: string
+    versiculo: string
     referencia: string
-    texto: string
-  }
-  hino: {
+    introducao: string
+    reflexao_central: string
+    aplicacao_pratica: string
+    oracao_final: string
+  } | null
+  hinos: Array<{
+    id: number
     titulo: string
     artista: string
-    link_opcional: string
-  }
-  imagem_fundo: string
+    ordem: number
+  }>
+  planoLeitura: {
+    id: number
+    titulo: string
+    descricao: string
+    leitura_manha: string
+    leitura_tarde: string
+    leitura_noite: string
+  } | null
+  pedidosOracao: Array<{
+    id: number
+    categoria: string
+    pedido: string
+  }>
 }
 
 interface PedidoOracao {
@@ -66,12 +83,19 @@ export default function MeuMomentoComDeus() {
   const [user, setUser] = useState<any>(null)
   const [userSubscription, setUserSubscription] = useState<UserSubscription | null>(null)
   const [isLoadingSubscription, setIsLoadingSubscription] = useState(false)
-  const [devocionalData, setDevocionalData] = useState<DevocionalData | null>(null)
+  const [conteudoDiario, setConteudoDiario] = useState<ConteudoDiario | null>(null)
+  const [isLoadingContent, setIsLoadingContent] = useState(true)
   const [pedidos, setPedidos] = useState<PedidoOracao[]>([])
   const [showPrayerModal, setShowPrayerModal] = useState(false)
   const [showAddPrayerModal, setShowAddPrayerModal] = useState(false)
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false)
   const [showPaymentPopup, setShowPaymentPopup] = useState(false)
+  const [showLoginModal, setShowLoginModal] = useState(false)
+  const [showRegisterModal, setShowRegisterModal] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const [loginForm, setLoginForm] = useState({ email: '', password: '' })
+  const [registerForm, setRegisterForm] = useState({ email: '', password: '', nome: '' })
+  const [authLoading, setAuthLoading] = useState(false)
   const [newPedido, setNewPedido] = useState<PedidoOracao>({
     titulo: '',
     descricao: '',
@@ -99,45 +123,122 @@ export default function MeuMomentoComDeus() {
     return userSubscription?.status === 'active'
   }
 
-  // Dados mockados para demonstração
-  const mockDevocionalData: DevocionalData = {
-    dia: currentDay,
-    devocional: {
-      texto_biblico_ref: "Salmos 23:1",
-      texto_biblico_full: "O Senhor é o meu pastor, nada me faltará.",
-      reflexao: "Hoje, lembre-se de que Deus é seu pastor. Ele conhece suas necessidades e cuida de você com amor infinito. Confie em Sua provisão e orientação em cada passo do seu dia.",
-      oracao: "Senhor, obrigado por ser meu pastor. Guia-me pelos caminhos da justiça e enche meu coração de paz. Que eu possa confiar em Ti em todos os momentos. Amém."
-    },
-    versiculo: {
-      referencia: "Filipenses 4:13",
-      texto: "Posso todas as coisas naquele que me fortalece."
-    },
-    hino: {
-      titulo: "Grandioso És Tu",
-      artista: "Tradicional",
-      link_opcional: "https://youtu.be/dQw4w9WgXcQ"
-    },
-    imagem_fundo: "céu com luz suave"
+  // Carregar conteúdo do dia
+  const carregarConteudoDiario = async () => {
+    setIsLoadingContent(true)
+    try {
+      const response = await fetch('/api/conteudo-do-dia')
+      if (response.ok) {
+        const data = await response.json()
+        setConteudoDiario(data)
+      } else {
+        console.error('Erro ao carregar conteúdo:', response.statusText)
+      }
+    } catch (error) {
+      console.error('Erro ao carregar conteúdo:', error)
+    } finally {
+      setIsLoadingContent(false)
+    }
+  }
+
+  // Gerar novo conteúdo (para testes)
+  const gerarNovoConteudo = async () => {
+    try {
+      const response = await fetch('/api/gerar-conteudo-diario', {
+        method: 'POST'
+      })
+      if (response.ok) {
+        await carregarConteudoDiario()
+        alert('Novo conteúdo gerado com sucesso!')
+      } else {
+        const error = await response.json()
+        alert('Erro ao gerar conteúdo: ' + error.message)
+      }
+    } catch (error) {
+      console.error('Erro ao gerar conteúdo:', error)
+      alert('Erro ao gerar conteúdo')
+    }
   }
 
   useEffect(() => {
-    setDevocionalData(mockDevocionalData)
-    checkUser()
-  }, [currentDay])
+    carregarConteudoDiario()
+  }, [])
 
-  const checkUser = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    setUser(user)
-    
+  useEffect(() => {
     if (user) {
-      // Verificar assinatura do usuário
+      checkSubscription()
+    }
+  }, [user])
+
+  const checkSubscription = async () => {
+    if (user) {
       const subscription = await checkUserSubscription(user.id)
       setUserSubscription(subscription)
     }
   }
 
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setAuthLoading(true)
+    
+    try {
+      const response = await loginUser(loginForm.email, loginForm.password)
+      
+      setUser(response.user)
+      setShowLoginModal(false)
+      setLoginForm({ email: '', password: '' })
+      
+      // Verificar assinatura após login
+      if (response.user) {
+        const subscription = await checkUserSubscription(response.user.id)
+        setUserSubscription(subscription)
+      }
+    } catch (error: any) {
+      alert('Erro no login: ' + error.message)
+    } finally {
+      setAuthLoading(false)
+    }
+  }
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setAuthLoading(true)
+    
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: registerForm.email,
+        password: registerForm.password,
+        options: {
+          data: {
+            nome: registerForm.nome
+          }
+        }
+      })
+      
+      if (error) throw error
+      
+      alert('Cadastro realizado! Verifique seu email para confirmar a conta.')
+      setShowRegisterModal(false)
+      setRegisterForm({ email: '', password: '', nome: '' })
+    } catch (error: any) {
+      alert('Erro no cadastro: ' + error.message)
+    } finally {
+      setAuthLoading(false)
+    }
+  }
+
+  const handleLogout = async () => {
+    setUser(null)
+    setUserSubscription(null)
+  }
+
   const handleSubscribe = async () => {
-    setShowPaymentPopup(true)
+    if (!user) {
+      setShowLoginModal(true)
+      return
+    }
+    // Redirecionar diretamente para o PagSeguro
+    window.open('https://pag.ae/81aj-zE2K', '_blank')
   }
 
   const openPaymentLink = () => {
@@ -173,7 +274,9 @@ export default function MeuMomentoComDeus() {
   }
 
   const compartilhar = async (tipo: string) => {
-    const texto = `${devocionalData?.versiculo.texto} - ${devocionalData?.versiculo.referencia}`
+    const texto = conteudoDiario?.devocional 
+      ? `${conteudoDiario.devocional.versiculo} - ${conteudoDiario.devocional.referencia}`
+      : 'Meu Momento com Deus'
     if (navigator.share) {
       await navigator.share({
         title: 'Meu Momento com Deus',
@@ -181,6 +284,221 @@ export default function MeuMomentoComDeus() {
         url: window.location.href
       })
     }
+  }
+
+  const LoginModal = () => {
+    if (!showLoginModal) return null
+    
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold text-gray-800">
+              Login Premium
+            </h2>
+            <button
+              onClick={() => setShowLoginModal(false)}
+              className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+            >
+              <X className="w-5 h-5 text-gray-500" />
+            </button>
+          </div>
+          
+          <div className="text-center mb-6">
+            <div className="w-20 h-20 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full mx-auto mb-4 flex items-center justify-center">
+              <LogIn className="w-10 h-10 text-white" />
+            </div>
+            <p className="text-gray-600">
+              Entre na sua conta para acessar o conteúdo Premium
+            </p>
+          </div>
+          
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Email
+              </label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="text"
+                  value={loginForm.email}
+                  onChange={(e) => setLoginForm({...loginForm, email: e.target.value})}
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Digite seu email"
+                  required
+                />
+              </div>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Senha
+              </label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={loginForm.password}
+                  onChange={(e) => setLoginForm({...loginForm, password: e.target.value})}
+                  className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Digite sua senha"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex space-x-4 pt-4">
+              <button
+                type="button"
+                onClick={() => setShowLoginModal(false)}
+                className="flex-1 py-3 px-6 rounded-xl transition-colors bg-gray-200 text-gray-700 hover:bg-gray-300"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={authLoading}
+                className="flex-1 bg-gradient-to-r from-blue-500 to-purple-600 text-white py-3 px-6 rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all duration-300 disabled:opacity-50"
+              >
+                {authLoading ? 'Entrando...' : 'Entrar'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    )
+  }
+
+  const RegisterModal = () => {
+    if (!showRegisterModal) return null
+    
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold text-gray-800">
+              Criar Conta Premium
+            </h2>
+            <button
+              onClick={() => setShowRegisterModal(false)}
+              className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+            >
+              <X className="w-5 h-5 text-gray-500" />
+            </button>
+          </div>
+          
+          <div className="text-center mb-6">
+            <div className="w-20 h-20 bg-gradient-to-br from-green-400 to-blue-500 rounded-full mx-auto mb-4 flex items-center justify-center">
+              <UserPlus className="w-10 h-10 text-white" />
+            </div>
+            <p className="text-gray-600">
+              Crie sua conta para acessar conteúdo exclusivo
+            </p>
+          </div>
+          
+          <form onSubmit={handleRegister} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Nome
+              </label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="text"
+                  value={registerForm.nome}
+                  onChange={(e) => setRegisterForm({...registerForm, nome: e.target.value})}
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="Seu nome"
+                  required
+                />
+              </div>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Email
+              </label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="email"
+                  value={registerForm.email}
+                  onChange={(e) => setRegisterForm({...registerForm, email: e.target.value})}
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="seu@email.com"
+                  required
+                />
+              </div>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Senha
+              </label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={registerForm.password}
+                  onChange={(e) => setRegisterForm({...registerForm, password: e.target.value})}
+                  className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="Mínimo 6 caracteres"
+                  required
+                  minLength={6}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex space-x-4 pt-4">
+              <button
+                type="button"
+                onClick={() => setShowRegisterModal(false)}
+                className="flex-1 py-3 px-6 rounded-xl transition-colors bg-gray-200 text-gray-700 hover:bg-gray-300"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={authLoading}
+                className="flex-1 bg-gradient-to-r from-green-500 to-blue-600 text-white py-3 px-6 rounded-xl hover:from-green-600 hover:to-blue-700 transition-all duration-300 disabled:opacity-50"
+              >
+                {authLoading ? 'Criando...' : 'Criar Conta'}
+              </button>
+            </div>
+          </form>
+          
+          <div className="text-center mt-6">
+            <p className="text-sm text-gray-600">
+              Já tem conta?{' '}
+              <button
+                onClick={() => {
+                  setShowRegisterModal(false)
+                  setShowLoginModal(true)
+                }}
+                className="text-green-600 hover:text-green-700 font-semibold"
+              >
+                Faça login
+              </button>
+            </p>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   const PaymentPopup = () => {
@@ -316,7 +634,7 @@ export default function MeuMomentoComDeus() {
               Bem-vindo(a) ao Meu Momento com Deus
             </h2>
             <p className="leading-relaxed text-gray-600">
-              Um espaço para fortalecer sua fé todos os dias.
+              Um espaço para fortalecer sua fé todos os dias com conteúdo atualizado automaticamente.
             </p>
           </div>
           <button
@@ -349,18 +667,49 @@ export default function MeuMomentoComDeus() {
                 <span>Premium</span>
               </div>
             )}
+            
+            {/* Botão para gerar novo conteúdo (apenas para testes) */}
+            <button
+              onClick={gerarNovoConteudo}
+              className="p-2 rounded-lg transition-colors hover:bg-gray-100"
+              title="Gerar novo conteúdo"
+            >
+              <RefreshCw className="w-5 h-5 text-gray-600" />
+            </button>
+            
             <button
               onClick={toggleDarkMode}
               className="p-2 rounded-lg transition-colors hover:bg-gray-100"
             >
               {darkMode ? <Sun className="w-5 h-5 text-yellow-400" /> : <Moon className="w-5 h-5 text-gray-600" />}
             </button>
-            <button
-              onClick={() => setCurrentView('profile')}
-              className="p-2 rounded-lg transition-colors hover:bg-gray-100"
-            >
-              <User className="w-5 h-5 text-gray-600" />
-            </button>
+            
+            {user ? (
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setCurrentView('profile')}
+                  className="p-2 rounded-lg transition-colors hover:bg-gray-100"
+                >
+                  <User className="w-5 h-5 text-gray-600" />
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="text-sm text-gray-600 hover:text-gray-800 px-3 py-1 rounded-lg hover:bg-gray-100"
+                >
+                  Sair
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setShowLoginModal(true)}
+                  className="flex items-center space-x-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-lg hover:from-blue-600 hover:to-purple-700 transition-all duration-300"
+                >
+                  <LogIn className="w-4 h-4" />
+                  <span>Login Premium</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -378,6 +727,11 @@ export default function MeuMomentoComDeus() {
           <p className="text-gray-600">
             {formatDate(new Date())}
           </p>
+          {isLoadingContent && (
+            <p className="text-sm text-gray-500 mt-2">
+              Carregando conteúdo do dia...
+            </p>
+          )}
         </div>
 
         {/* Banner de Assinatura - Ícone Grande ESTÁTICO */}
@@ -451,14 +805,17 @@ export default function MeuMomentoComDeus() {
                 {readDevocionais.includes(currentDay) && <Check className="w-6 h-6 text-green-500" />}
               </div>
               <p className="text-sm mb-4 text-gray-600 font-semibold">
-                {devocionalData?.devocional.texto_biblico_ref}
+                {conteudoDiario?.devocional?.referencia || 'Carregando...'}
               </p>
               <p className="text-gray-500 text-sm mb-4">
-                "{hasAccess() ? devocionalData?.devocional.texto_biblico_full : 'Conteúdo disponível apenas para assinantes Premium...'}"
+                "{hasAccess() 
+                  ? (conteudoDiario?.devocional?.versiculo || 'Carregando conteúdo...')
+                  : 'Conteúdo disponível apenas para assinantes Premium...'
+                }"
               </p>
               <div className="flex items-center justify-between">
                 <span className="text-xs text-gray-400">
-                  Dia {currentDay} • 5 min de leitura
+                  {conteudoDiario?.devocional?.tema || 'Carregando...'} • 5 min de leitura
                 </span>
                 <button className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors ${
                   hasAccess() 
@@ -495,7 +852,10 @@ export default function MeuMomentoComDeus() {
                 </h3>
               </div>
               <p className="text-gray-600 text-sm mb-4">
-                {hasAccess() ? 'Gênesis 1-3 • Mateus 1-2' : 'Conteúdo Premium'}
+                {hasAccess() 
+                  ? (conteudoDiario?.planoLeitura?.titulo || 'Carregando plano...')
+                  : 'Conteúdo Premium'
+                }
               </p>
               <div className="mb-4">
                 <div className="flex justify-between text-sm text-gray-500 mb-2">
@@ -537,11 +897,11 @@ export default function MeuMomentoComDeus() {
                 </h3>
               </div>
               <p className="text-gray-600 text-sm mb-4 italic">
-                "{devocionalData?.versiculo.texto}"
+                "{conteudoDiario?.devocional?.versiculo || 'Carregando versículo...'}"
               </p>
               <div className="flex items-center justify-between">
                 <span className="text-xs text-gray-400">
-                  {devocionalData?.versiculo.referencia}
+                  {conteudoDiario?.devocional?.referencia || 'Carregando...'}
                 </span>
                 <button className="bg-[#D4AF37] text-white px-4 py-2 rounded-full text-sm font-semibold hover:bg-[#B8941F] transition-colors">
                   Compartilhar
@@ -574,32 +934,47 @@ export default function MeuMomentoComDeus() {
                 </h3>
               </div>
               <p className="text-gray-600 text-sm mb-4">
-                {hasAccess() ? `${pedidos.length} pedidos ativos` : 'Funcionalidade Premium'}
+                {hasAccess() 
+                  ? `${conteudoDiario?.pedidosOracao?.length || 0} pedidos de exemplo`
+                  : 'Funcionalidade Premium'
+                }
               </p>
               <div className="space-y-2 mb-4">
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-red-400 rounded-full"></div>
-                  <span className="text-sm text-gray-600">{hasAccess() ? 'Saúde da família' : 'Conteúdo Premium'}</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-yellow-400 rounded-full"></div>
-                  <span className="text-sm text-gray-600">{hasAccess() ? 'Trabalho' : 'Conteúdo Premium'}</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                  <span className="text-sm text-gray-600">{hasAccess() ? 'Relacionamentos' : 'Conteúdo Premium'}</span>
-                </div>
+                {hasAccess() && conteudoDiario?.pedidosOracao?.slice(0, 3).map((pedido, index) => (
+                  <div key={pedido.id} className="flex items-center space-x-2">
+                    <div className={`w-2 h-2 rounded-full ${
+                      index === 0 ? 'bg-red-400' : 
+                      index === 1 ? 'bg-yellow-400' : 'bg-green-400'
+                    }`}></div>
+                    <span className="text-sm text-gray-600">{pedido.categoria}</span>
+                  </div>
+                )) || (
+                  <>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-red-400 rounded-full"></div>
+                      <span className="text-sm text-gray-600">Conteúdo Premium</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-yellow-400 rounded-full"></div>
+                      <span className="text-sm text-gray-600">Conteúdo Premium</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                      <span className="text-sm text-gray-600">Conteúdo Premium</span>
+                    </div>
+                  </>
+                )}
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-xs text-gray-400">
-                  {hasAccess() ? 'Compartilhe suas necessidades' : 'Apenas para Premium'}
+                  {hasAccess() ? 'Exemplos de pedidos' : 'Apenas para Premium'}
                 </span>
                 <button className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors ${
                   hasAccess() 
                     ? 'bg-[#D4AF37] text-white hover:bg-[#B8941F]'
                     : 'bg-gray-300 text-gray-600'
                 }`}>
-                  {hasAccess() ? 'Adicionar' : 'Premium'}
+                  {hasAccess() ? 'Ver Todos' : 'Premium'}
                 </button>
               </div>
             </div>
@@ -648,10 +1023,16 @@ export default function MeuMomentoComDeus() {
               Hino do Dia
             </h3>
             <p className="text-sm text-gray-600 mb-2">
-              {hasAccess() ? devocionalData?.hino.titulo : 'Conteúdo Premium'}
+              {hasAccess() 
+                ? (conteudoDiario?.hinos?.[0]?.titulo || 'Carregando...')
+                : 'Conteúdo Premium'
+              }
             </p>
             <p className="text-xs text-gray-400">
-              {hasAccess() ? devocionalData?.hino.artista : 'Apenas para assinantes'}
+              {hasAccess() 
+                ? (conteudoDiario?.hinos?.[0]?.artista || 'Carregando...')
+                : 'Apenas para assinantes'
+              }
             </p>
           </div>
 
@@ -714,7 +1095,7 @@ export default function MeuMomentoComDeus() {
           <span>← Voltar</span>
         </button>
         <h1 className="text-3xl font-bold mb-2 text-gray-800">
-          Devocional do Dia — Dia {currentDay}
+          {conteudoDiario?.devocional?.tema || 'Devocional do Dia'}
         </h1>
         <p className="text-gray-600">
           {formatDate(new Date())}
@@ -729,13 +1110,25 @@ export default function MeuMomentoComDeus() {
           </h2>
           <div className="rounded-xl p-6 border-l-4 border-blue-500 bg-gradient-to-r from-blue-50 to-purple-50">
             <p className="italic mb-2 text-lg text-gray-700">
-              "{devocionalData?.devocional.texto_biblico_full}"
+              "{conteudoDiario?.devocional?.versiculo || 'Carregando versículo...'}"
             </p>
             <p className="text-sm font-semibold text-blue-600">
-              {devocionalData?.devocional.texto_biblico_ref}
+              {conteudoDiario?.devocional?.referencia || 'Carregando referência...'}
             </p>
           </div>
         </div>
+
+        {/* Introdução */}
+        {conteudoDiario?.devocional?.introducao && (
+          <div className="mb-8">
+            <h2 className="text-xl font-semibold mb-4 text-gray-800">
+              Introdução
+            </h2>
+            <p className="leading-relaxed text-base text-gray-600">
+              {conteudoDiario.devocional.introducao}
+            </p>
+          </div>
+        )}
 
         {/* Reflexão */}
         <div className="mb-8">
@@ -743,9 +1136,21 @@ export default function MeuMomentoComDeus() {
             Reflexão
           </h2>
           <p className="leading-relaxed text-base text-gray-600">
-            {devocionalData?.devocional.reflexao}
+            {conteudoDiario?.devocional?.reflexao_central || 'Carregando reflexão...'}
           </p>
         </div>
+
+        {/* Aplicação Prática */}
+        {conteudoDiario?.devocional?.aplicacao_pratica && (
+          <div className="mb-8">
+            <h2 className="text-xl font-semibold mb-4 text-gray-800">
+              Aplicação Prática
+            </h2>
+            <p className="leading-relaxed text-base text-gray-600">
+              {conteudoDiario.devocional.aplicacao_pratica}
+            </p>
+          </div>
+        )}
 
         {/* Oração */}
         <div className="mb-8">
@@ -754,7 +1159,7 @@ export default function MeuMomentoComDeus() {
           </h2>
           <div className="rounded-xl p-6 border-l-4 border-purple-500 bg-gradient-to-r from-purple-50 to-pink-50">
             <p className="italic text-base text-gray-700">
-              {devocionalData?.devocional.oracao}
+              {conteudoDiario?.devocional?.oracao_final || 'Carregando oração...'}
             </p>
           </div>
         </div>
@@ -852,7 +1257,7 @@ export default function MeuMomentoComDeus() {
               <ul className="space-y-4">
                 <li className="flex items-center space-x-3">
                   <Check className="w-5 h-5 text-green-500" />
-                  <span className="text-gray-600">Devocionais exclusivos</span>
+                  <span className="text-gray-600">Devocionais exclusivos atualizados diariamente</span>
                 </li>
                 <li className="flex items-center space-x-3">
                   <Check className="w-5 h-5 text-green-500" />
@@ -860,7 +1265,7 @@ export default function MeuMomentoComDeus() {
                 </li>
                 <li className="flex items-center space-x-3">
                   <Check className="w-5 h-5 text-green-500" />
-                  <span className="text-gray-600">Playlists especiais</span>
+                  <span className="text-gray-600">Hinos e músicas especiais</span>
                 </li>
                 <li className="flex items-center space-x-3">
                   <Check className="w-5 h-5 text-green-500" />
@@ -909,9 +1314,6 @@ export default function MeuMomentoComDeus() {
             <p className="text-sm text-gray-500 mt-4">
               Pagamento seguro via PagSeguro • Cancele a qualquer momento
             </p>
-            <p className="text-xs text-gray-400 mt-2">
-              Link de pagamento: {PAGSEGURO_PAYMENT_LINK}
-            </p>
           </div>
         </>
       )}
@@ -932,7 +1334,7 @@ export default function MeuMomentoComDeus() {
               <Circle className="w-8 h-8 text-white" />
             </div>
             <p className="italic text-gray-600">
-              "{devocionalData?.devocional.oracao}"
+              "{conteudoDiario?.devocional?.oracao_final || 'Carregando oração...'}"
             </p>
           </div>
           <div className="flex space-x-4">
@@ -966,7 +1368,7 @@ export default function MeuMomentoComDeus() {
               Meu Momento com Deus
             </h3>
             <p className="text-sm text-gray-600">
-              Um espaço para fortalecer sua fé todos os dias.
+              Um espaço para fortalecer sua fé todos os dias com conteúdo atualizado automaticamente.
             </p>
           </div>
           <div>
@@ -1177,6 +1579,8 @@ export default function MeuMomentoComDeus() {
       <Footer />
       <BottomNavigation />
       <WelcomeModal />
+      <LoginModal />
+      <RegisterModal />
       <PrayerModal />
       <SubscriptionModal />
       <PaymentPopup />
