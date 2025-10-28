@@ -6,6 +6,14 @@ export async function GET(
   { params }: { params: { user_id: string } }
 ) {
   try {
+    // Verificar se as variáveis de ambiente estão configuradas
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL === 'https://placeholder.supabase.co') {
+      return NextResponse.json(
+        { error: 'Supabase não configurado. Configure as variáveis de ambiente.' },
+        { status: 503 }
+      )
+    }
+
     const { data, error } = await supabase
       .from('assinaturas')
       .select('*')
@@ -55,6 +63,14 @@ export async function POST(
   { params }: { params: { user_id: string } }
 ) {
   try {
+    // Verificar se as variáveis de ambiente estão configuradas
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL === 'https://placeholder.supabase.co') {
+      return NextResponse.json(
+        { error: 'Supabase não configurado. Configure as variáveis de ambiente.' },
+        { status: 503 }
+      )
+    }
+
     const body = await request.json()
     
     const subscriptionData = {

@@ -6,6 +6,14 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    // Verificar se as variáveis de ambiente estão configuradas
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL === 'https://placeholder.supabase.co') {
+      return NextResponse.json(
+        { error: 'Supabase não configurado. Configure as variáveis de ambiente.' },
+        { status: 503 }
+      )
+    }
+
     const { data, error } = await supabase
       .from('devocionais')
       .select('*')
@@ -30,6 +38,14 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
+    // Verificar se as variáveis de ambiente estão configuradas
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL === 'https://placeholder.supabase.co') {
+      return NextResponse.json(
+        { error: 'Supabase não configurado. Configure as variáveis de ambiente.' },
+        { status: 503 }
+      )
+    }
+
     const { user_id } = await request.json()
     
     const { data, error } = await supabase

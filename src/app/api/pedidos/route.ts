@@ -3,6 +3,14 @@ import { supabase } from '@/lib/supabase'
 
 export async function GET(request: NextRequest) {
   try {
+    // Verificar se as variáveis de ambiente estão configuradas
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL === 'https://placeholder.supabase.co') {
+      return NextResponse.json(
+        { error: 'Supabase não configurado. Configure as variáveis de ambiente.' },
+        { status: 503 }
+      )
+    }
+
     const { searchParams } = new URL(request.url)
     const user_id = searchParams.get('user_id')
     const publico = searchParams.get('publico')
@@ -35,6 +43,14 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Verificar se as variáveis de ambiente estão configuradas
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL === 'https://placeholder.supabase.co') {
+      return NextResponse.json(
+        { error: 'Supabase não configurado. Configure as variáveis de ambiente.' },
+        { status: 503 }
+      )
+    }
+
     const body = await request.json()
     
     const { data, error } = await supabase
@@ -57,6 +73,14 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
+    // Verificar se as variáveis de ambiente estão configuradas
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL === 'https://placeholder.supabase.co') {
+      return NextResponse.json(
+        { error: 'Supabase não configurado. Configure as variáveis de ambiente.' },
+        { status: 503 }
+      )
+    }
+
     const body = await request.json()
     const { id, ...updateData } = body
     
@@ -81,6 +105,14 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    // Verificar se as variáveis de ambiente estão configuradas
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL === 'https://placeholder.supabase.co') {
+      return NextResponse.json(
+        { error: 'Supabase não configurado. Configure as variáveis de ambiente.' },
+        { status: 503 }
+      )
+    }
+
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
 
