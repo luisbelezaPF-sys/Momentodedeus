@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     // Verificar se as variáveis de ambiente estão configuradas
@@ -14,6 +14,7 @@ export async function GET(
       )
     }
 
+    const params = await context.params
     const { data, error } = await supabase
       .from('devocionais')
       .select('*')
@@ -35,7 +36,7 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     // Verificar se as variáveis de ambiente estão configuradas
@@ -47,6 +48,7 @@ export async function POST(
     }
 
     const { user_id } = await request.json()
+    const params = await context.params
     
     const { data, error } = await supabase
       .from('devocionais_status')

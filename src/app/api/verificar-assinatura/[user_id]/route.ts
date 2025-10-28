@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { user_id: string } }
+  context: { params: Promise<{ user_id: string }> }
 ) {
   try {
     // Verificar se as variáveis de ambiente estão configuradas
@@ -14,6 +14,7 @@ export async function GET(
       )
     }
 
+    const params = await context.params
     const { data, error } = await supabase
       .from('assinaturas')
       .select('*')
@@ -60,7 +61,7 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { user_id: string } }
+  context: { params: Promise<{ user_id: string }> }
 ) {
   try {
     // Verificar se as variáveis de ambiente estão configuradas
@@ -71,6 +72,7 @@ export async function POST(
       )
     }
 
+    const params = await context.params
     const body = await request.json()
     
     const subscriptionData = {
